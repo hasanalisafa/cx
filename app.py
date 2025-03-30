@@ -3,21 +3,18 @@ import json
 import logging
 from datetime import datetime
 from aiogram import Bot, Dispatcher, types
-from aiogram.types import ParseMode
+from aiogram.types import ParseMode, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils import executor
 from dotenv import load_dotenv
 
-# Load .env file
+# Load .env
 load_dotenv()
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 
 bot = Bot(token=TOKEN, parse_mode=ParseMode.HTML)
 dp = Dispatcher(bot)
 
-# تخزين خطوات كل مستخدم
 user_steps = {}
-
-# Logging setup
 logging.basicConfig(level=logging.INFO)
 
 @dp.message_handler(commands=['start'])
@@ -55,13 +52,11 @@ async def handle_steps(message: types.Message):
             await message.answer("❌ Invalid invitation code.")
             user_steps.pop(chat_id, None)
             return
-        step_data["invite"] = text
         step_data["step"] = 5
         await message.answer("Would you like to enable auto-booking? (yes/no)")
     elif step == 5:
         step_data["auto_book"] = text.lower() == "yes"
 
-        # حفظ البيانات
         user_data = {
             "chat_id": chat_id,
             "name": message.from_user.full_name,
@@ -69,7 +64,8 @@ async def handle_steps(message: types.Message):
             "code": step_data["code"],
             "birthdate": step_data["birthdate"],
             "auto_book": step_data["auto_book"],
-            "registered_at": datetime.now().strftime("%Y-%m-%d %H:%M")
+            "registered_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "skipped_dates": []
         }
 
         try:
@@ -85,5 +81,30 @@ async def handle_steps(message: types.Message):
         await message.answer("✅ Your data has been saved. We will notify you when an appointment is found.")
         user_steps.pop(chat_id, None)
 
-if __name__ == "__main__":
-    executor.start_polling(dp, skip_updates=True)
+# ========= التعامل مع رفض الموعد =========
+@dp.callback_query_handler(lambda c: c.data == "ignore_booking")
+async def ignore_booking(callback_query: types.CallbackQuery):
+    chat_id = callback_query.from_user.id
+    message_text = callback_query.message.text
+
+    # استخراج التاريخ من الرسالة
+    if "Appointment available on:" in message_text:
+        date_line = message_text.split("Appointment available on:")[1].strip().split("\n")[0]
+        date = date_line.strip()
+
+        try:
+            with open("users.json", "r", encoding="utf-8") as f:
+                users = json.load(f)
+            for user in users:
+                if user["chat_id"] == chat_id:
+                    if "skipped_dates" not in user:
+                        user["skipped_dates"] = []
+                    if date not in user["skipped_dates"]:
+                        user["skipped_dates"].append(date)
+            with open("users.json", "w", encoding="utf-8") as f:
+                json.dump(users, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"❌ Failed to save skipped date: {e}")
+
+    await bot.answer_callback_query(callback_query.id)
+    await bot.send_message(chat_id, "⏭️ Booking skipped. You won’t be notified again for this date.")
