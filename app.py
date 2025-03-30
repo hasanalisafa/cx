@@ -7,7 +7,7 @@ from aiogram.types import ParseMode, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils import executor
 from dotenv import load_dotenv
 
-# Load .env
+# Load environment variables from .env file
 load_dotenv()
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 
@@ -16,6 +16,9 @@ dp = Dispatcher(bot)
 
 user_steps = {}
 logging.basicConfig(level=logging.INFO)
+
+# Path to users.json (always relative to the script)
+USERS_FILE = os.path.join(os.getcwd(), "users.json")
 
 @dp.message_handler(commands=['start'])
 async def cmd_start(message: types.Message):
@@ -69,26 +72,26 @@ async def handle_steps(message: types.Message):
         }
 
         try:
-            with open("users.json", "r", encoding="utf-8") as f:
-                content = f.read().strip()
-                users = json.loads(content) if content else []
-        except (json.JSONDecodeError, FileNotFoundError):
+            if os.path.exists(USERS_FILE):
+                with open(USERS_FILE, 'r', encoding='utf-8') as f:
+                    users = json.load(f)
+            else:
+                users = []
+        except:
             users = []
 
         users.append(user_data)
-        with open("users.json", "w", encoding="utf-8") as f:
+        with open(USERS_FILE, 'w', encoding='utf-8') as f:
             json.dump(users, f, ensure_ascii=False, indent=2)
 
-        # تأكيد الحفظ للمستخدم
-        confirmation_text = (
+        msg = (
             "✅ <b>Registration complete and saved!</b>\n\n"
             f"<b>Service:</b> {user_data['service']}\n"
             f"<b>Code:</b> {user_data['code']}\n"
             f"<b>Birthdate:</b> {user_data['birthdate']}\n"
             f"<b>Auto-booking:</b> {'Yes' if user_data['auto_book'] else 'No'}"
         )
-        await message.answer(confirmation_text)
-
+        await message.answer(msg)
         user_steps.pop(chat_id, None)
 
 if __name__ == "__main__":
