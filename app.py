@@ -68,55 +68,28 @@ async def handle_steps(message: types.Message):
             "skipped_dates": []
         }
 
-        # Ensure users.json exists
-        if not os.path.exists("users.json"):
-            with open("users.json", "w", encoding="utf-8") as f:
-                json.dump([], f)
-
-        with open("users.json", "r", encoding="utf-8") as f:
-            users = json.load(f)
+        try:
+            with open("users.json", "r", encoding="utf-8") as f:
+                content = f.read().strip()
+                users = json.loads(content) if content else []
+        except (json.JSONDecodeError, FileNotFoundError):
+            users = []
 
         users.append(user_data)
-
         with open("users.json", "w", encoding="utf-8") as f:
             json.dump(users, f, ensure_ascii=False, indent=2)
 
-        await message.answer(
-            f"✅ <b>Registration complete and saved!</b>\n\n"
+        # تأكيد الحفظ للمستخدم
+        confirmation_text = (
+            "✅ <b>Registration complete and saved!</b>\n\n"
             f"<b>Service:</b> {user_data['service']}\n"
             f"<b>Code:</b> {user_data['code']}\n"
             f"<b>Birthdate:</b> {user_data['birthdate']}\n"
             f"<b>Auto-booking:</b> {'Yes' if user_data['auto_book'] else 'No'}"
         )
+        await message.answer(confirmation_text)
+
         user_steps.pop(chat_id, None)
 
-# ====== Handle skipping appointments (in future) ======
-@dp.callback_query_handler(lambda c: c.data == "ignore_booking")
-async def ignore_booking(callback_query: types.CallbackQuery):
-    chat_id = callback_query.from_user.id
-    message_text = callback_query.message.text
-
-    if "Appointment available on:" in message_text:
-        date_line = message_text.split("Appointment available on:")[1].strip().split("\n")[0]
-        date = date_line.strip()
-
-        try:
-            with open("users.json", "r", encoding="utf-8") as f:
-                users = json.load(f)
-            for user in users:
-                if user["chat_id"] == chat_id:
-                    if "skipped_dates" not in user:
-                        user["skipped_dates"] = []
-                    if date not in user["skipped_dates"]:
-                        user["skipped_dates"].append(date)
-            with open("users.json", "w", encoding="utf-8") as f:
-                json.dump(users, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"❌ Failed to save skipped date: {e}")
-
-    await bot.answer_callback_query(callback_query.id)
-    await bot.send_message(chat_id, "⏭️ Booking skipped. You won’t be notified again for this date.")
-
-# Start polling
 if __name__ == "__main__":
     executor.start_polling(dp, skip_updates=True)
