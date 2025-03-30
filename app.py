@@ -7,7 +7,7 @@ from aiogram.types import ParseMode
 from aiogram.utils import executor
 from dotenv import load_dotenv
 
-# Load environment variables from .env
+# Load .env
 load_dotenv()
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 
@@ -18,6 +18,13 @@ user_steps = {}
 logging.basicConfig(level=logging.INFO)
 
 DB_FILE = "data/users.db"
+
+# Check if database exists
+async def check_db_exists():
+    if os.path.exists(DB_FILE):
+        print("✅ users.db exists!")
+    else:
+        print("❌ users.db NOT FOUND. It will be created.")
 
 async def init_db():
     os.makedirs("data", exist_ok=True)
@@ -108,6 +115,9 @@ async def handle_steps(message: types.Message):
             ))
             await db.commit()
 
+        # After the first user is saved, check if the DB exists
+        await check_db_exists()
+
         msg = (
             "✅ <b>Registration complete and saved to database!</b>\n\n"
             f"<b>Service:</b> {user_data['service']}\n"
@@ -121,5 +131,5 @@ async def handle_steps(message: types.Message):
 if __name__ == "__main__":
     import asyncio
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(init_db())
+    loop.run_until_complete(init_db())  # Create the database on the first run
     executor.start_polling(dp, skip_updates=True)
